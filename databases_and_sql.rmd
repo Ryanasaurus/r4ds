@@ -1,0 +1,214 @@
+---
+title: "Databases"
+author: "Ryan Atkinson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r required packages}
+library(here)
+library(tidyverse)
+library(DBI) # low-level database interface to connect to databases
+library(dbplyr)# translates your dplyr code to SQL queries 
+library(duckdb)
+# install.packages("duckdb")
+```
+
+```{r keys, eval=FALSE}
+# https://r4ds.hadley.nz/databases.html
+DBI: Database interface
+DMBS: DataBase Management Systems
+```
+
+
+
+```{r 23.2 Databases}
+# 1.) Database tables are stored on disk and can be arbitrarily large. Data frames are stored in memory
+# 2.) Database tables almost always have indexes. Data frames and tibbles don’t have indexes, but data.tables do, which is one of the reasons that they’re so fast.
+# 3.) Most classical databases are optimized for rapidly collecting data, not analyzing existing data. These databases are called row-oriented because the data is stored row-by-row;
+  # there’s been much development of column-oriented databases that make analyzing the existing data much faster.
+```
+
+```{r database management systems (DBMS)}
+# 1.) Client-server DBMS’s: run on a powerful central server, which you connect from your computer (the client). They are great for sharing data with multiple people in an organisation.
+  # Popular client-server DBMS’s include PostgreSQL, MariaDB, SQL Server, and Oracle.
+# 2.) Cloud DBMS’s: are similar to client server DBMS’s, but they run in the cloud
+  # (examples: Snowflake, Amazon’s RedShift, and Google’s BigQuery)
+# 3.) In-process DBMS’s run entirely on your computer. They’re great for working with large datasets where you’re the primary user.
+  # SQLite or duckdb,
+```
+
+```{r 23.3}
+# To connect to the database from R, you’ll use a pair of packages:
+  # 1.) DBI
+  # 2.) relevant package that connects to particular DMBs
+  # 3.) If you can’t find a specific package for your DBMS, you can usually use the odbc package instead; is complicated.
+```
+
+```{r creating a database, steps}
+# Create a database connection using DBI::dbConnect()
+
+# Concretely, you create a database connection using DBI::dbConnect(). The first argument selects the DBMS2, then the second and subsequent arguments describe how to connect to it
+
+con <- DBI::dbConnect(
+  RMariaDB::MariaDB(), 
+  username = "foo"
+)
+con <- DBI::dbConnect(
+  RPostgres::Postgres(), 
+  hostname = "databases.mycompany.com", 
+  port = 1234
+)
+```
+
+```{r duckdb demonstration}
+# Thanks to the magic of DBI, the only difference between using duckdb and any other DBMS is how you’ll connect to the database.
+# We're only using duckdb::duckdb() instead of those above for ease of use.
+con <- DBI::dbConnect(duckdb::duckdb())
+# Connecting to duckdb is particularly simple because the defaults create a temporary database that is deleted when you quit R
+```
+
+```{r using duckdb and saving it, eval=FALSE}
+# If you want to use duckdb for a real data analysis project, you’ll also need to supply the dbdir argument to make a persistent database and tell duckdb where to save it
+
+con <- DBI::dbConnect(duckdb::duckdb(), dbdir = "duckdb")
+```
+
+
+```{r 23.3.2 loading some data}
+# to add data: DBI::dbWriteTable();
+  # 3 arguments: a database connection (con), the name fo the table to create in the database ("mpg"), and a dataframe of data
+dbWriteTable(con, "mpg", ggplot2::mpg)
+dbWriteTable(con, "diamonds", ggplot2::diamonds)
+```
+
+```{r, eval=FALSE}
+# If you’re using duckdb in a real project, we highly recommend learning about 
+duckdb_read_csv() and 
+duckdb_register_arrow()
+# These give you powerful and performant ways to quickly load data directly into duckdb. 
+```
+
+```{r 23.4 DBI basics: checking if a table exists}
+# to check if a table exists, use dbListTables()
+con <- DBI::dbConnect(duckdb::duckdb())
+dbWriteTable(con, "mpg", ggplot2::mpg)
+dbListTables(con)
+# to check if a specific table exists:
+dbExistsTable(con, "mpg") # returns TRUE
+dbExistsTable(con, "palmemrpenguins") # returns FALSE
+```
+
+```{r Extracting data from a table 23.4.2}
+mpg <- con %>% dbReadTable("mpg") %>% as_tibble()
+# In real life, it’s rare that you’ll use dbReadTable() because often database tables are too big to fit in memory, 
+# and you want bring back only a subset of the rows and columns.
+
+```
+
+```{r 23.4.3 Run a query/retrieve data with dbGetQuery(connection, query)}
+# dbGetQuery() --- takes a database connection and some SQL code and returns a dataframe
+sql <- "
+  SELECT carat, clarity, price
+  FROM diamonds
+  WHERE price > 15000
+"
+
+as_tibble(dbGetQuery(con, sql)) # think of con as being like a connection
+```
+
+
+```{r 23.4.3 dealing with large datasets, eval=FALSE}
+if you’re dealing with very large datasets it’s possible to deal with a “page” of data at a time by using dbSendQuery() to get a “result set” which you can page through by calling dbFetch() until dbHasCompleted() returns TRUE
+```
+
+
+```{r 23.5 dbplyr basics}
+# dbplyr: is a dplyr backend, which means that you keep writing dplyr code but the backend executes it differently. In this, dbplyr translates to SQL; 
+# dtplyr: translates to data.table; 
+# multidplyr: executes your code on multiple cores.
+
+# To use dbplyr, you must first use tbl() to create an object that represents a database table:
+diamonds_db <- tbl(con, "diamonds")
+```
+
+```{r 2 other ways to interact with a database}
+# many corporate databases are very large so you need some hierarchy to keep all the tables organised. In that case you might need to supply a schema, or a catalog and a schema, in order to pick the table you’re interested in:
+diamonds_db <- tbl(con, in_schema("sales", "diamonds"))
+diamonds_db <- tbl(con, in_catalog("north_america", "sales", "diamonds"))  
+# Other times you might want to use your own SQL query as a starting point:
+diamonds_db <- tbl(con, sql("SELECT * FROM diamonds"))
+# This object is lazy; when you use dplyr verbs on it, dplyr doesn’t do any work: it just records the sequence of operations that you want to perform and only performs them when needed
+```
+
+```{r dbplyer verbs example}
+big_diamonds_db <- diamonds_db %>% 
+  filter(price > 15000) %>% 
+  select(carat:clarity, price)
+
+big_diamonds_db %>%
+  show_query()
+
+# To get all the data back into R, you call collect(). Behind the scenes, this generates the SQL, calls dbGetQuery() to get the data, then turns the result into a tibble:
+  
+big_diamonds <- big_diamonds_db %>% 
+  collect()
+
+# Typically, you’ll use dbplyr to select the data you want from the database, performing basic filtering and aggregation using the translations described below. Then, once you’re ready to analyse the data with functions that are unique to R, you’ll collect() the data to get an in-memory tibble
+```
+
+```{r}
+# We’ll explore the relationship between dplyr and SQL using a couple of old friends from the nycflights13 package: flights and planes.
+dbplyr::copy_nycflights13(con)
+flights <- tbl(con, "flights")
+planes <- tbl(con, "planes")
+```
+
+```{r 23.6.1 SQL basics}
+# Top-level components: statements;
+  # CREATE: defines new tables
+  # INSERT: adds data
+  # SELECT: queries (almost exclusively what one will use as a data scientist)
+      # Queries: made up of clauses;
+        # Clauses: SELECT, FROM, WHERE, ORDER BY, GROUP BY
+          # Note: Every query must have the SELECT and FROM clauses;
+          # Note: Simplest query is SELECT * FROM ___; selects all columns from a specified table (shown as ____).
+```
+
+```{r catch up}
+# con <- DBI::dbConnect(duckdb::duckdb())
+con <- dbConnect(duckdb())
+
+dbplyr::copy_nycflights13(con)
+flights <- tbl(con, "flights")
+planes <- tbl(con, "planes")
+```
+
+```{r show_query}
+# show_query() shows what details are of a table, using dplyer terms with dbplyer package
+flights %>% show_query()
+# WHERE and ORDER BY control which rows are included and how they are ordered:
+flights %>%  
+  filter(dest == "IAH") %>% 
+  arrange(dep_delay)  %>% 
+  show_query()
+```
+
+```{r 23.6.2 SELECT}
+# The SELECT clause is the workhorse of queries and performs the same job as 
+  # select(), 
+  # mutate(), 
+  # rename(), 
+  # relocate(), 
+  # summarize()
+
+# In SQL terminology renaming is called aliasing and is done with AS;
+# Note that unlike mutate(), the old name is on the left and the new name is on the right.
+```
+
+
+

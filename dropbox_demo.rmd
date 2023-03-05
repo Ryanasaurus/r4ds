@@ -1,0 +1,98 @@
+---
+title: "Untitled"
+author: "Ryan Atkinson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r required packages}
+library(here)
+library(tidyverse)
+library(googlesheets4)
+library(rdrop2)
+```
+
+```{r rdrop2 steps 1-2}
+# Step 1: create dropbox and gmail accounts; have a consistent browser, like Chrome; MS Edge; Safari.
+# Step 2: use drop_auth() to authenticate 
+drop_auth()
+
+
+drop_acc()	# Get information about current Dropbox account.
+drop_auth()	# Authentication for Dropbox
+drop_content_hash()	# Compute Dropbox's content hash for one or more files
+```
+
+```{r create/delete folders}
+drop_create() # Creates a folder on Dropbox
+  # example: drop_create("Get Started with Dropbox.pdf")
+drop_delete()	# Deletes a file or folder.
+  # example: drop_delete("Get Started with Dropbox.pdf")	
+```
+
+```{r}
+drop_dir() #	List folder contents and associated metadata.
+drop_get()	# Downloads a file from Dropbox
+drop_get_metadata()	# Retrieve metadata for a file or folder.
+drop_history()	# Obtains metadata for all available revisions of a file, including the current revision.
+```
+
+```{r}
+drop_download()	# Download a file from Dropbox to disk.
+drop_exists()	# Checks to see if a file/folder exists on Dropbox
+drop_search()	# Returns metadata for all files and folders whose filename contains the given search string as a substring.
+```
+
+```{r}
+drop_copy()	# Copies a file or folder to a new location.
+drop_move()	# Moves a file or folder to a new location.
+```
+
+```{r}
+drop_list_shared_links() #	List all shared links
+drop_media()	# Returns a link directly to a file.
+```
+
+```{r}
+drop_read_csv()	# drop_read_csv
+drop_share()	# Creates and returns a shared link to a file or folder.
+drop_upload()	# Uploads a file to Dropbox.
+```
+
+```{r pipes and sheets}
+pipes <- gs4_create()
+
+read_sheet
+write_sheet
+```
+
+
+
+### Read Below; Above is instructions
+```{r, eval=FALSE}
+drop_create("xlsx_files")
+drop_create("csv_files")
+
+drop_upload("penguins.xlsx", path = "xlsx_files")
+
+penguins <- replace(penguins, is.na(penguins), 999)
+penguins <- palmerpenguins::penguins
+
+      # works for single column in base R; need to map to iterate or use a for loop
+      # penguins$bill_length_mm %>% replace(is.na(.), 999)
+
+      # Works for all columns with tidyverse principles
+        # Idea: if this column is numeric, replace any of its NA values with a 0
+    # ~replace_na is the .predicate, which denotes where the variable returns TRUE
+penguins %>% mutate_if(is.numeric, ~replace_na(.,999L))
+
+# Below is the updated version
+penguins %>% mutate(across(where(is.numeric), ~replace_na(., 999)))
+```
+
+
+

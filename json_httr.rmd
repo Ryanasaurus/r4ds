@@ -1,0 +1,28 @@
+---
+title: "json"
+author: "Ryan Atkinson"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r required packages}
+library(here)
+library(tidyverse)
+library(googlesheets4)
+library(rdrop2)
+library(jsonlite)
+library(httr)
+```
+
+
+```{r}
+
+```
+
+
+
